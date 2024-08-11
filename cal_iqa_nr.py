@@ -84,25 +84,8 @@ def main():
 		"--img_path",
 		nargs="+",
 		help="path to the input image",
-		default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/realPhoto_nomask/sample00',
-		#default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/realPhoto',
+		default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/realPhoto/sample00',
 	)
-
-	# parser.add_argument(
-	# 	"--init-imgs-names",
-	# 	nargs="+",
-	# 	help="name of the input image",
-	# 	default=['****-0', '****-1', '****-2', '****-3', '****-4', '****-5', '****-6', '****-7', '****-8', '****-9'
-	# 	],
-	# 	)
-
-	# parser.add_argument(
-	# 	"--gt_path",
-	# 	nargs="+",
-	# 	help="path to the gt image, you need to add the paths of gt folders corresponding to init-imgs",
-	# 	#default='/home/tiger/gh/dataset/CUFED5/Real_Deg/HR'
-	# 	default='/home/tiger/gh/dataset/CUFED5/Real_Deg/HR',
-	# )
 	
 	parser.add_argument(
 		"--log",
@@ -138,18 +121,12 @@ def main():
 	logger.info(opt)
 
 	# init metrics: you can add more metrics here
-	iqa_ssim = pyiqa.create_metric('ssim', test_y_channel=True, color_space='ycbcr').to(device)
-	iqa_psnr = pyiqa.create_metric('psnr', test_y_channel=True, color_space='ycbcr').to(device)
-	iqa_lpips = pyiqa.create_metric('lpips', device=device)
 	iqa_niqe =   pyiqa.create_metric('niqe', device=device)
 	iqa_musiq = pyiqa.create_metric('musiq-koniq',device=device)
 	iqa_clipiqa = pyiqa.create_metric('clipiqa',device=device)
-	#iqa_maniqa= pyiqa.create_metric('maniqa',device=device)
-
-	iqa_fid   = pyiqa.create_metric('fid',device=device)
 
 	# record metrics
-	metrics = { 'niqe': [], 'musiq': [], 'clipiqa': []}#, 'maniqa': []}
+	metrics = { 'niqe': [], 'musiq': [], 'clipiqa': []}
 
 
 	for img_name in sorted(os.listdir(opt.img_path)):
@@ -160,14 +137,9 @@ def main():
 		input_sr_img = cv2.imread(input_sr_path, cv2.IMREAD_COLOR)
 		sr = img2tensor(input_sr_img, bgr2rgb=True, float32=True).unsqueeze(0).cuda().contiguous()
 
-		
-	
 		# PSNR: convert the ycbcr to calculate
 	
 		sr = sr[..., 4:-4, 4:-4] / 255.
-
-		
-
 		niqe_now = iqa_niqe(sr).item()
 		metrics['niqe'].append(niqe_now)
 
@@ -176,21 +148,11 @@ def main():
 
 		clipiqa_now = iqa_clipiqa(sr).item()
 		metrics['clipiqa'].append(clipiqa_now)
-
-	
-
-		# maniqa_now = iqa_maniqa(sr).item()
-		# metrics['maniqa'].append(maniqa_now)
-
 	
 
 	for key,value in metrics.items():
 		logger.info('{}:{:.6f}'.format(key,sum(value)/len(value)))
 		
-	# save metrics
-	# npy_path = os.path.join(opt.log, 'test_' + opt.log_name + '_npy')
-	# os.makedirs(npy_path, exist_ok=True)
-	# np.save(npy_path + '/' + 'save.npy', metrics)
 
 
 if __name__ == '__main__':

@@ -59,7 +59,7 @@ def main(lr_folder_path):
             print(f'{lr_image_name}==>score:{max_simi_score}')
             if max_simi_score < 0.6:
                 low_relevence_list.append(lr_image_name)
-            results[lr_image_name] = best_match_paths #已经按照顺序排好了。方便TopK索引
+            results[lr_image_name] = best_match_paths 
     print(low_relevence_list)
     return results
 
@@ -70,14 +70,11 @@ def main(lr_folder_path):
 if __name__ == '__main__':
     # Assuming `path_to_lr_folder` is the path to the low-resolution images folder
     matching_results = main('/home/tiger/gh/dataset/RealPhoto60')
-    #for lr_img, hr_img in matching_results.items():
-     #   print(f"Low-res image {lr_img} is best matched with high-res image {hr_img}")
+    for lr_img, hr_img in matching_results.items():
+        print(f"Low-res image {lr_img} is best matched with high-res image {hr_img}")
 
 
     # Save results to JSON file
     with open('/home/tiger/gh/dataset/retrieve_realPhoto.json', 'w') as fp:
         json.dump(matching_results, fp, indent=4)
 
-    # load json to dict 
-    # with open('/home/tiger/gh/dataset/retrieve_realPhoto.json', 'r') as fp:
-    #   data_loaded = json.load(fp)

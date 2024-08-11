@@ -47,13 +47,12 @@ def get_sim_mask(X,Y):
     Y_flat = Y.reshape(B, C, H*W).permute(0, 2, 1)  # Size: [B, HW, C]
     X_norm = X_flat / (X_flat.norm(dim=2, keepdim=True) + 1e-8)  # Size: [B, HW, C]
     Y_norm = Y_flat / (Y_flat.norm(dim=2, keepdim=True) + 1e-8)  # Size: [B, HW, C]
-    # 步骤3: 计算余弦相似度
     similarity_matrix = torch.bmm(X_norm, Y_norm.transpose(1, 2))  # Size: [B, HW, HW]
 
     similarity_matrix = torch.mean(similarity_matrix,dim=2,keepdim=False) # [B,HW,0]
     mask = similarity_matrix.reshape(B,1,H,W)
-    max_vals = mask.max(dim=3, keepdim=True)[0].max(dim=2, keepdim=True)[0]  # 最大值, shape [B, 1, 1, 1]
-    min_vals = mask.min(dim=3, keepdim=True)[0].min(dim=2, keepdim=True)[0]  # 最小值, shape [B, 1, 1, 1]
+    max_vals = mask.max(dim=3, keepdim=True)[0].max(dim=2, keepdim=True)[0]  # shape [B, 1, 1, 1]
+    min_vals = mask.min(dim=3, keepdim=True)[0].min(dim=2, keepdim=True)[0]  #  shape [B, 1, 1, 1]
     normalized_mask = (mask - min_vals) / (max_vals - min_vals + 1e-8)
 
     return normalized_mask
@@ -572,20 +571,14 @@ class GLVControl(nn.Module):
         # h = x.type(self.dtype)
         h = xt
         for depth, module in enumerate(self.input_blocks):
-            # TODO  ========== CtrolNet ========
-            # 0: Noting,  1: Cat,  2: Replace, 3: DynamicCrafter
-            if  depth in [7,8]: # [4,5]x2  [6-Down]  [7,8]x10 
-                n_times_crossframe_attn_in_self = 0
-            else:
-                n_times_crossframe_attn_in_self = 0
-
-
-            if guided_hint is not None: # TODO 这里的hint只进入第一次
+            #========== CtrolNet ========
+            n_times_crossframe_attn_in_self = 0
+            if guided_hint is not None: 
                 h = module(h, emb, context)
                 h += guided_hint
                 guided_hint = None
             else:
-                h = module(h, emb, context,n_times_crossframe_attn_in_self=n_times_crossframe_attn_in_self) # TODO ControlNet 在这里改
+                h = module(h, emb, context,n_times_crossframe_attn_in_self=n_times_crossframe_attn_in_self)
             
             
             hs.append(h)
@@ -697,32 +690,18 @@ class LightGLVUNet(UNetModel):
         global decoder_h,decoder_w
         for i, module in enumerate(self.output_blocks):
             # TODO============. Decoder ===========
-            # 0: Noting,  1: Cat,  2: Replace 3: DynamiCrafter
             if i in [0,1,2,3,4,5]:
-                n_times_crossframe_attn_in_self = 3
+                n_times_crossframe_attn_in_self = 1
             else:
                 n_times_crossframe_attn_in_self = 0
 
-           
-        
-
-            # 在这里加入controlNet的特征
             _h = hs.pop()
             h = self.project_modules[adapter_idx](control[control_idx], _h, h, control_scale=control_scale)
-            
-
-
-            # NOTE 在和controlNet的特征融合之前，进行mask的获取，而不是加入controlNet之后 
             msk1 = get_sim_mask(h[0:1],h[1:2])
             msk2 = get_sim_mask(h[2:3],h[3:4])
             msk = torch.cat([msk1,msk2]) # [2,1,H,W]
             register_msk = msk
             decoder_h, decoder_w = h.shape[-2:]
-
-            # TODO 在一开始去噪的每个blk层中都去做AdaIN
-            # if timesteps[0]>900:
-            #     h[0]= adain_latent(h[0],h[1])
-            #     h[2]= adain_latent(h[2],h[3])
 
             adapter_idx -= 1
             # h = th.cat([h, _h], dim=1)
@@ -743,14 +722,6 @@ class LightGLVUNet(UNetModel):
                 h = module(h, emb, context,n_times_crossframe_attn_in_self=n_times_crossframe_attn_in_self)
             control_idx -= 1
 
-                        
-            # TODO 在一开始去噪的每个blk层中都去做AdaIN
-            # if timesteps[0]>900:
-            #     h[0]= adain_latent(h[0],h[1])
-            #     h[2]= adain_latent(h[2],h[3])
-
-            # print(module)
-            # print(h.shape)
 
         h = h.type(x.dtype)
         if self.predict_codebook_ids:

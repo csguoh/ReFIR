@@ -169,7 +169,7 @@ class SUPIRModel(DiffusionEngine):
             seed = random.randint(0, 65535)
         seed_everything(seed)
 
-        _z = self.encode_first_stage_with_denoise(x, use_sample=False) # ref真的需要再额外经过enc-dec吗？它本身就已经是干净图像了
+        _z = self.encode_first_stage_with_denoise(x, use_sample=False) 
         x_stage1 = self.decode_first_stage(_z)
         z_stage1 = self.encode_first_stage(x_stage1)
 
@@ -179,13 +179,8 @@ class SUPIRModel(DiffusionEngine):
             self.model, input, sigma, c, control_scale, **kwargs
         )
 
-        noised_z = torch.randn_like(_z).to(_z.device) # TODO 最开始的噪声初始化
-        # TODO 使用同样的噪声，对于不同的分支 Ref - LR
+        noised_z = torch.randn_like(_z).to(_z.device) 
         noised_z = torch.stack([noised_z[0] for _ in range(noised_z.shape[0])]).to(_z.device)
-
-        # TODO 使用Consist I2V的方法
-        #LPF = gaussian_low_pass_filter(noised_z.shape,d_s=0.05).to(_z.device)
-        #noised_z = freq_mix_3d(_z, noised_z, LPF) #  目前使用的是inp-ref 各自用自己的低频信息
 
         _samples = self.sampler(denoiser, noised_z, cond=c, uc=uc, x_center=z_stage1, control_scale=control_scale,
                                 use_linear_control_scale=use_linear_control_scale, control_scale_start=control_scale_start)

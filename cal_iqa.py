@@ -84,25 +84,16 @@ def main():
 		"--img_path",
 		nargs="+",
 		help="path to the input image",
-		#default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/cufed5/sample00',
-		default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/cufed',
+		default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/cufed/sample00',
+		#default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/cufed',
 	)
 
-
-	# parser.add_argument(
-	# 	"--init-imgs-names",
-	# 	nargs="+",
-	# 	help="name of the input image",
-	# 	default=['****-0', '****-1', '****-2', '****-3', '****-4', '****-5', '****-6', '****-7', '****-8', '****-9'
-	# 	],
-	# 	)
 
 	parser.add_argument(
 		"--gt_path",
 		nargs="+",
 		help="path to the gt image, you need to add the paths of gt folders corresponding to init-imgs",
-		#default='/home/tiger/gh/dataset/WR-SR-testset/Real_Deg/HR'
-		default='/home/tiger/gh/dataset/CUFED5/Real_Deg/HR',
+		default='/home/tiger/gh/dataset/CUFED5/Real_Deg/HR'
 	)
 	
 	parser.add_argument(
@@ -146,21 +137,18 @@ def main():
 	iqa_niqe =   pyiqa.create_metric('niqe', device=device)
 	iqa_musiq = pyiqa.create_metric('musiq-koniq',device=device)
 	iqa_clipiqa = pyiqa.create_metric('clipiqa',device=device)
-	#iqa_maniqa= pyiqa.create_metric('maniqa',device=device)
 
 	iqa_fid   = pyiqa.create_metric('fid',device=device)
 
 	# record metrics
-	metrics = {'psnr': [], 'ssim': [], 'lpips': [], 'niqe': [], 'fid': [], 'musiq': [], 'clipiqa': []}#, 'maniqa': []}
-
-
+	metrics = {'psnr': [], 'ssim': [], 'lpips': [], 'niqe': [], 'fid': [], 'musiq': [], 'clipiqa': []}
 
 
 	for img_name in sorted(os.listdir(opt.img_path)):
 		print(img_name)
 		input_sr_path = os.path.join(opt.img_path,img_name)
 		#input_gt_path = os.path.join(opt.gt_path,img_name).replace('SR','HR').replace('LR','HR') # TODO need to be modified
-		input_gt_path = os.path.join(opt.gt_path,img_name).replace('LR','HR')# TODO need to be modified
+		input_gt_path = os.path.join(opt.gt_path,img_name).replace('LR','HR')
 		#input_gt_path = os.path.join(opt.gt_path,img_name.split('_0_LR')[0]+'_HR.png')
 
 		input_sr_img = cv2.imread(input_sr_path, cv2.IMREAD_COLOR)
@@ -194,8 +182,6 @@ def main():
 		clipiqa_now = iqa_clipiqa(sr).item()
 		metrics['clipiqa'].append(clipiqa_now)
 
-		# maniqa_now = iqa_maniqa(sr).item()
-		# metrics['maniqa'].append(maniqa_now)
 
 	fid_now = iqa_fid(opt.img_path,opt.gt_path)
 	metrics['fid'].append(fid_now)
@@ -203,10 +189,6 @@ def main():
 	for key,value in metrics.items():
 		logger.info('{}:{:.6f}'.format(key,sum(value)/len(value)))
 		
-	# save metrics
-	# npy_path = os.path.join(opt.log, 'test_' + opt.log_name + '_npy')
-	# os.makedirs(npy_path, exist_ok=True)
-	# np.save(npy_path + '/' + 'save.npy', metrics)
 
 
 if __name__ == '__main__':

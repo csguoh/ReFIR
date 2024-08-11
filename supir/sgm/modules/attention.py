@@ -13,7 +13,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 
 TOTOAL_ATTN1_LAYER = 36
-cur_att_layer = 1 # 用于余弦学习率递减操作
+cur_att_layer = 1 
 
 
 def adain_latentBHLC(feat, cond_feat, eps=1e-5):
@@ -29,12 +29,10 @@ def adain_latentBHLC(feat, cond_feat, eps=1e-5):
     cond_feat_mean = cond_feat.mean(dim=2).view(B, head, 1, C)
     feat = (feat - feat_mean.expand(size)) / feat_std.expand(size)
 
-    target_std = cond_feat_std#(0.9*feat_std + 0.1*cond_feat_std)
-    target_mean= cond_feat_mean#(0.9*feat_mean + 0.1*cond_feat_mean)
+    target_std = cond_feat_std
+    target_mean= cond_feat_mean
 
     return feat * target_std.expand(size) + target_mean.expand(size)
-
-
 
 
 
@@ -54,462 +52,6 @@ def exponential_schedule(timestep, total_steps, alpha=5.0):
 def linear_schedule(timestep, total_steps):
     return timestep / total_steps
 
-
-
-def match_histograms(source, target, nbins=256):
-    """
-    Adjust the histogram of the target features to match that of the source features using NumPy for interpolation.
-
-    Parameters:
-        source (torch.Tensor): Source domain features (batchsize x seqlen x channel).
-        target (torch.Tensor): Target domain features (batchsize x seqlen x channel).
-        nbins (int): Number of bins for histogram calculation.
-
-    Returns:
-        torch.Tensor: Target domain features adjusted to have histograms matching the source.
-    """
-    batchsize, seqlen, channel = source.shape
-    source = source.reshape(-1, channel)
-    target = target.reshape(-1, channel)
-
-    min_val = min(source.min().item(), target.min().item())
-    max_val = max(source.max().item(), target.max().item())
-
-    matched_target = torch.empty_like(target)
-
-    for i in range(channel):
-        source_hist = np.histogram(source[:, i].cpu().numpy(), bins=nbins, range=(min_val, max_val))[0]
-        target_hist = np.histogram(target[:, i].cpu().numpy(), bins=nbins, range=(min_val, max_val))[0]
-
-        source_cdf = np.cumsum(source_hist).astype(np.float32)
-        source_cdf /= source_cdf[-1]
-        target_cdf = np.cumsum(target_hist).astype(np.float32)
-        target_cdf /= target_cdf[-1]
-
-        interp_values = np.interp(target[:, i].cpu().numpy(),
-                                  np.linspace(min_val, max_val, nbins),
-                                  np.linspace(min_val, max_val, nbins)[np.argsort(target_cdf)[np.searchsorted(source_cdf, target_cdf, side='right') - 1]])
-
-        matched_target[:, i] = torch.from_numpy(interp_values).to(target.dtype).to(target.device)
-
-    matched_target = matched_target.view(batchsize, seqlen, channel)
-    return matched_target
-
-    
-
-
-def ipfp_adjustment(source, target, step_size=0.1, iterations=5):
-    """
-    Adjust target features towards source features using Iterative Proportional Fitting Procedure.
-
-    Parameters:
-        source (torch.Tensor): Source domain features (batch_size x seq_len x feature_size).
-        target (torch.Tensor): Target domain features (batch_size x seq_len x feature_size).
-        step_size (float): Step size for adjustment.
-        iterations (int): Number of iterations to perform adjustment.
-
-    Returns:
-        torch.Tensor: Adjusted target features.
-    """
-    source_flat = source.view(-1, source.size(-1))
-    target_flat = target.view(-1, target.size(-1))
-
-    for _ in range(iterations):
-        # Compute joint distributions using outer products
-        # Sum over batch and sequence to create a pseudo-joint distribution over feature dimensions
-        source_sum = torch.einsum('bi,bj->ij', source_flat, source_flat)
-        target_sum = torch.einsum('bi,bj->ij', target_flat, target_flat)
-
-        # Compute adjustment factors
-        # Avoid division by zero by adding a small epsilon where target_sum is zero
-        adjustment_factor = torch.sqrt(source_sum / (target_sum + 1e-8))
-
-        # Apply adjustment factor to target
-        target_flat = step_size * (adjustment_factor @ target_flat.t()).t() + (1 - step_size) * target_flat
-
-    # Reshape back to original dimensions
-    adjusted_target = target_flat.view_as(target).contiguous()
-    return adjusted_target
-
-
-
-import scipy.sparse as sp
-from scipy.sparse import csr_matrix
-from sklearn.neighbors import kneighbors_graph
-
-def compute_adjacency(data, k=10):
-    """
-    Compute the k-nearest neighbor adjacency matrix for data using sparse representations.
-    """
-    # Compute the k-nearest graph as a sparse matrix
-    A = kneighbors_graph(data, n_neighbors=k, include_self=True, mode='connectivity')
-    return A
-
-def sparse_to_torch_sparse(data):
-    """
-    Convert scipy sparse matrix to torch sparse tensor.
-    """
-    data = data.tocoo().astype(np.float32)
-    indices = torch.LongTensor([data.row, data.col])
-    values = torch.FloatTensor(data.data)
-    shape = torch.Size(data.shape)
-    return torch.sparse.FloatTensor(indices, values, shape)
-
-def manifold_alignment1(source, target, alpha=0.1, regularization=0.1, k=10):
-    """
-    Align target features to source features using manifold learning based on graph regularization with sparse matrices.
-
-    Parameters:
-        source (torch.Tensor): Source domain features (batch_size x seq_len x feature_size).
-        target (torch.Tensor): Target domain features (batch_size x seq_len x feature_size).
-        alpha (float): Blending factor for alignment.
-        regularization (float): Regularization term for manifold smoothness.
-        k (int): Number of nearest neighbors for graph construction.
-
-    Returns:
-        torch.Tensor: Manifold aligned features.
-    """
-    # Reshape and merge all samples to fit the sklearn API
-    source_flat = source.view(-1, source.shape[-1]).cpu().numpy()
-    target_flat = target.view(-1, target.shape[-1]).cpu().numpy()
-
-    # Compute adjacency matrices
-    source_adj = compute_adjacency(source_flat, k=k)
-    target_adj = compute_adjacency(target_flat, k=k)
-
-    # Compute the graph Laplacians
-    source_lap = sp.csgraph.laplacian(source_adj, normed=False)
-    target_lap = sp.csgraph.laplacian(target_adj, normed=False)
-
-    # Blend Laplacians
-    blended_lap = alpha * source_lap + (1 - alpha) * target_lap
-
-    # Regularize and convert blended Laplacian to torch tensor
-    blended_lap = csr_matrix(blended_lap + regularization * sp.eye(blended_lap.shape[0]))
-    blended_lap_torch = sparse_to_torch_sparse(blended_lap).to_dense()
-
-    # Use pseudo-inverse for solving (more stable for potentially singular matrices)
-    lap_pseudo_inv = torch.pinverse(blended_lap_torch)
-
-    # Apply the transformation: Y = (L + reg * I)^-1 * X
-    target_features_flat = target.view(-1, target.shape[-1]).to(torch.float32)
-    adjusted_features = torch.mm(lap_pseudo_inv, target_features_flat.t()).t()
-
-    return adjusted_features.view_as(target)
-
-
-
-
-def manifold_alignment(source, target, alpha=0.1, regularization=0.1):
-    """
-    Align target features to source features using manifold learning based on graph regularization.
-
-    Parameters:
-        source (torch.Tensor): Source domain features (batch_size x seq_len x feature_size).
-        target (torch.Tensor): Target domain features (batch_size x seq_len x feature_size).
-        alpha (float): Blending factor for alignment.
-        regularization (float): Regularization term for manifold smoothness.
-
-    Returns:
-        torch.Tensor: Manifold aligned features.
-    """
-    # Compute adjacency matrices (simple Euclidean for demonstration)
-    def adjacency_matrix(data):
-        D = torch.cdist(data, data, p=2)
-        A = torch.exp(-D**2 / regularization)
-        return A
-
-    # Get adjacency for source and target
-    source_adj = adjacency_matrix(source.view(-1, source.shape[-1]))
-    target_adj = adjacency_matrix(target.view(-1, target.shape[-1]))
-
-    # Graph Laplacians
-    source_lap = torch.diag(source_adj.sum(1)) - source_adj
-    target_lap = torch.diag(target_adj.sum(1)) - target_adj
-
-    # Blend adjacency matrices
-    blended_lap = alpha * source_lap + (1 - alpha) * target_lap
-
-    # Align using the blended Laplacian
-    # Simple optimization step assuming `features` as variables (requires solver setup)
-    # For demonstration, using gradient descent step mock-up
-    adjusted_features = target.view(-1, target.shape[-1]) - 0.01 * torch.matmul(blended_lap, target.view(-1, target.shape[-1]))
-
-    return adjusted_features.view_as(target)
-
-
-
-def feature_whitening(features):
-    """
-    Applies ZCA whitening to the given features.
-
-    Parameters:
-        features (torch.Tensor): Input features of shape (batch_size x seq_len x feature_size).
-        
-    Returns:
-        torch.Tensor: Whitened features.
-    """
-    # Flatten the Batchsize and SeqLen dimensions
-    original_shape = features.shape
-    features = features.view(-1, features.shape[-1])
-
-    # Compute the mean and subtract it
-    mean = torch.mean(features, dim=0)
-    features -= mean
-
-    # Compute the covariance matrix
-    cov = torch.mm(features.t()/math.sqrt(features.size(0)), features/math.sqrt(features.size(0)))
-    U, S, V = torch.svd(cov.float())
-
-    # Compute the ZCA Whitening matrix
-    epsilon = 1e-5  # Small constant to prevent division by zero
-    ZCA_matrix = torch.mm(U, torch.mm(torch.diag(1.0 / torch.sqrt(S + epsilon)), U.t()))
-
-    # Apply the whitening matrix
-    features_whitened = torch.mm(features, ZCA_matrix)
-
-    return features_whitened.view(original_shape)
-
-
-
-def robust_scale(source, target):
-    """
-    Apply robust scaling based on median and interquartile range.
-
-    Parameters:
-        source (torch.Tensor): Source domain features (batch_size x seq_len x feature_size).
-        target (torch.Tensor): Target domain features (batch_size x seq_len x feature_size).
-
-    Returns:
-        torch.Tensor: Scaled target features.
-    """
-    # Flatten features
-    source1 = source.view(-1, source.shape[-1])
-    target1 = target.view(-1, target.shape[-1])
-
-    # Compute robust statistics
-    sou_q25, sou_median, sou_q75 = torch.quantile(source1.float(), torch.tensor([0.25, 0.5, 0.75]).to(source.device), dim=0)
-    sou_iqr = sou_q75 - sou_q25
-
-    tar_q25, tar_median, tar_q75 = torch.quantile(target1.float(), torch.tensor([0.25, 0.5, 0.75]).to(source.device), dim=0)
-    tar_iqr = tar_q75 - tar_q25
-
-    # Scale features
-    target_scaled = (target1 - tar_median) / (tar_iqr + 1e-5)
-    target_scaled = target_scaled * sou_iqr + sou_median
-    return target_scaled.view_as(target).to(dtype = target.dtype)
-
-
-
-def sinkhorn_transport(source, target, reg_lambda=0.5, num_iters=50):
-    bs, sl, ch = source.shape
-    source = source.view(-1, ch)
-    target = target.view(-1, ch)
-
-    M = torch.cdist(source, target, p=2)**2
-    K = torch.exp(-M / reg_lambda)
-
-    a = torch.ones((bs * sl, 1), device=source.device) / (bs * sl)
-    b = torch.ones((bs * sl, 1), device=target.device) / (bs * sl)
-
-    u = torch.ones((bs * sl, 1), device=source.device)
-    v = torch.ones((bs * sl, 1), device=target.device)
-
-    for _ in range(num_iters):
-        u = a / (K @ v)
-        v = b / (K.t() @ u)
-
-    G = u * K * v.t()
-
-    target_adjusted = G @ target
-    target_adjusted = target_adjusted.view(bs, sl, ch)
-
-    return target_adjusted
-
-
-
-
-
-def coral(source, target):
-    """
-    Perform CORAL on the target domain features to align them with the source domain features.
-    Assumes input dimensions [Batchsize, SeqLen, Channel].
-
-    Parameters:
-        source (torch.Tensor): Source domain features (batch_size x seq_len x feature_size).
-        target (torch.Tensor): Target domain features (batch_size x seq_len x feature_size).
-
-    Returns:
-        torch.Tensor: Adjusted target domain features.
-    """
-    # Reshape the inputs to [Batchsize*SeqLen, Channel]
-    tmp = target
-    source = source.view(-1, source.shape[-1])
-    target = target.view(-1, target.shape[-1])
-
-    # Step 1: Standardize features (zero-mean)
-    source_mean = torch.mean(source, dim=0, keepdim=True)
-    target_mean = torch.mean(target, dim=0, keepdim=True)
-    source = source - source_mean
-    target = target - target_mean
-
-    # Step 2: Compute covariance matrices
-    source_cov = source.t().mm(source) / (source.shape[0] - 1)
-    target_cov = target.t().mm(target) / (target.shape[0] - 1)
-
-    # Step 3: Compute the Cholesky decomposition of the source covariance matrix
-    source_cov_chol = torch.linalg.cholesky(source_cov + 1e-5 * torch.eye(source_cov.size(0), device=source.device))
-
-    # Step 4: Compute the inverse Cholesky decomposition of the target covariance matrix
-    target_cov_chol_inv = torch.linalg.inv(torch.linalg.cholesky(target_cov + 1e-5 * torch.eye(target_cov.size(0), device=target.device)))
-
-    # Step 5: Apply the CORAL transform
-    target_aligned = target.mm(target_cov_chol_inv).mm(source_cov_chol)
-
-    # Reshape back to the original shape [Batchsize, SeqLen, Channel]
-    target_aligned = target_aligned.view_as(tmp)
-
-    return target_aligned
-
-
-
-
-def PCA_align(feat,feat_cond):
-    B, L, C = feat.shape
-    # Reshape the features to [B*L, C] for PCA
-    source_feat_flat = feat_cond.view(B * L, C).cpu().numpy()
-    target_feat_flat = feat.view(B * L, C).cpu().numpy()
-
-    # Compute the mean and covariance matrix of the source domain features
-    source_mean = np.mean(source_feat_flat, axis=0)
-
-    # Perform PCA on the source domain features
-    pca = PCA(n_components=C)
-    pca.fit(source_feat_flat - source_mean)
-
-    # Project the target domain features onto the principal components of the source domain
-    transformed_target_feat_flat = pca.transform(target_feat_flat - source_mean)
-    transformed_source_feat_flat = pca.transform(source_feat_flat - source_mean)
-    # Reshape the transformed features back to [B, L, C] and convert to torch tensor
-    transformed_target_feat = torch.from_numpy(transformed_target_feat_flat.reshape(B, L, C)).to(device=feat.device, dtype=feat.dtype)
-    transformed_source_feat = torch.from_numpy(transformed_source_feat_flat.reshape(B, L, C)).to(device=feat.device, dtype=feat.dtype)
-    return transformed_target_feat, transformed_source_feat
-
-
-
-def ZCA_align(feat, feat_cond):
-    B, L, C = feat_cond.size()
-    feat_reshaped = feat_cond.view(-1, C)
-    feat = feat.view(-1,C)
-    # Compute the mean of the feature maps
-    mean = torch.mean(feat_reshaped, dim=0)
-    # Subtract the mean from the feature maps
-    feat_centered = feat_reshaped - mean
-    feat_centered = feat_centered.float()
-    # Compute the covariance matrix
-    cov_matrix = torch.matmul((feat_centered.T)/math.sqrt(B*L), (feat_centered)/math.sqrt(B*L))
-    # Perform Singular Value Decomposition (SVD)
-    
-    U, S, V = torch.svd(cov_matrix.float())
-    
-    # Apply ZCA whitening
-    epsilon = 1e-5  # Small constant to avoid division by zero
-    zca_matrix = torch.matmul(U, torch.matmul(torch.diag(1.0 / torch.sqrt(S + epsilon)), U.T))
-    whitened_feat_reshaped = torch.matmul(feat_centered, zca_matrix.T)
-    feat = torch.matmul(feat-mean, zca_matrix.T)
-    # Reshape the whitened feature maps back to [B, L, C]
-    whitened_feat = whitened_feat_reshaped.view(B, L, C)
-    feat = feat_reshaped.view(B, L, C)
-    return feat, whitened_feat
-
-
-class GaussianSmoothing(nn.Module):
-    """
-    Apply gaussian smoothing on a
-    1d, 2d or 3d tensor. Filtering is performed seperately for each channel
-    in the input using a depthwise convolution.
-    Arguments:
-        channels (int, sequence): Number of channels of the input tensors. Output will
-            have this number of channels as well.
-        kernel_size (int, sequence): Size of the gaussian kernel.
-        sigma (float, sequence): Standard deviation of the gaussian kernel.
-        dim (int, optional): The number of dimensions of the data.
-            Default value is 2 (spatial).
-    """
-    def __init__(self, channels, kernel_size=3, sigma=0.5, dim=2):
-        super(GaussianSmoothing, self).__init__()
-        if isinstance(kernel_size, numbers.Number):
-            kernel_size = [kernel_size] * dim
-        if isinstance(sigma, numbers.Number):
-            sigma = [sigma] * dim
-
-        # The gaussian kernel is the product of the
-        # gaussian function of each dimension.
-        kernel = 1
-        meshgrids = torch.meshgrid(
-            [
-                torch.arange(size, dtype=torch.float32)
-                for size in kernel_size
-            ]
-        )
-        for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
-            mean = (size - 1) / 2
-            kernel *= 1 / (std * math.sqrt(2 * math.pi)) * \
-                      torch.exp(-((mgrid - mean) / (2 * std)) ** 2)
-
-        # Make sure sum of values in gaussian kernel equals 1.
-        kernel = kernel / torch.sum(kernel)
-
-        # Reshape to depthwise convolutional weight
-        kernel = kernel.view(1, 1, *kernel.size())
-        kernel = kernel.repeat(channels, *[1] * (kernel.dim() - 1))
-
-        self.register_buffer('weight', kernel)
-        self.groups = channels
-
-        if dim == 1:
-            self.conv = F.conv1d
-        elif dim == 2:
-            self.conv = F.conv2d
-        elif dim == 3:
-            self.conv = F.conv3d
-        else:
-            raise RuntimeError(
-                'Only 1, 2 and 3 dimensions are supported. Received {}.'.format(dim)
-            )
-
-    def forward(self, input,hw_size=None):
-        # 先改变到二维大小，之后使用高斯滤波，最后把滤波后到结果重塑回来
-        B,L,C = input.shape
-        if hw_size == None:
-            H=W=torch.sqrt(L).long()
-        else:
-            H,W=hw_size
-        assert H*W == L
-        x = input.reshape(B,H,W,C).permute(0,3,1,2).contiguous() # B,C,H,W
-        x = F.conv2d(x, weight=self.weight.to(input.dtype), groups=self.groups,padding=1)
-        x = x.reshape(B,C,L).permute(0,2,1).contiguous()
-        return x
-
-
-
-def adain_latent1(feat, cond_feat, eps=1e-5):
-    # eps is a small value added to the variance to avoid divide-by-zero.
-    size = feat.size() # [head, L, C]
-    head, L , C = size
-    feat_var = feat.var(dim=1) + eps
-    feat_std = feat_var.sqrt().view(head, 1, C)
-    feat_mean = feat.mean(dim=1).view(head, 1, C)
-    
-    cond_feat_var = cond_feat.var(dim=1) + eps
-    cond_feat_std = cond_feat_var.sqrt().view(head, 1, C)
-    cond_feat_mean = cond_feat.mean(dim=1).view(head, 1, C)
-    feat = (feat - feat_mean.expand(size)) / feat_std.expand(size)
-
-    target_std = (0.9*feat_std + 0.1*cond_feat_std)
-    target_mean= (0.9*feat_mean + 0.1*cond_feat_mean)
-
-    return feat * target_std.expand(size) + target_mean.expand(size)
 
 
 
@@ -832,7 +374,6 @@ class MemoryEfficientCrossAttention(nn.Module):
         v = self.to_v(context)
 
         if n_times_crossframe_attn_in_self:
-            # TODO ==========已知需要进行跨帧注意力，实现跨帧注意力==================
             b, l, _ = q.shape # [B,L,C]
             q, k, v = map(
                 lambda t: t.unsqueeze(3)
@@ -846,32 +387,9 @@ class MemoryEfficientCrossAttention(nn.Module):
             inp_v,ref_v = torch.stack([v[0],v[2]]).reshape(-1,v.shape[-2],v.shape[-1]),torch.stack([v[1],v[3]]).reshape(-1,v.shape[-2],v.shape[-1]) # [num_head, L, C]
 
             if n_times_crossframe_attn_in_self == 1: 
-                #Cat
-                inp_out = xformers.ops.memory_efficient_attention(
-                    inp_q, torch.cat([inp_k,ref_k],dim=1), torch.cat([inp_v,ref_v],dim=1), attn_bias=None, op=self.attention_op
-                ).reshape(-1,self.heads,q.shape[-2],q.shape[-1])
-            elif n_times_crossframe_attn_in_self ==2: 
-                # Replace
-                inp_out = xformers.ops.memory_efficient_attention(
-                    inp_q, ref_k, ref_v, attn_bias=None, op=self.attention_op
-                ).reshape(-1,self.heads, q.shape[-2], q.shape[-1])
-
-
-            elif n_times_crossframe_attn_in_self ==3: 
-                # DynaimcCrafter
                 inp_out1 = xformers.ops.memory_efficient_attention(
                     inp_q, inp_k, inp_v, attn_bias=None, op=self.attention_op
                 ).reshape(-1,self.heads,l,self.dim_head)
-
-
-                # TODO 对inp_q进行归一化
-                # tmp1=adain_latent1(inp_q.view(2,self.heads,l,self.dim_head)[0], ref_k.view(2,self.heads,ref_k.shape[-2],self.dim_head)[0])
-                # tmp2=adain_latent1(inp_q.view(2,self.heads,l,self.dim_head)[1], ref_k.view(2,self.heads,ref_k.shape[-2],self.dim_head)[1])
-                # inp_q = torch.stack([tmp1,tmp2]).view(-1,l,self.dim_head)
-                
-                #GS2 = GaussianSmoothing(self.dim_head).to(ref_k.device)
-                #ref_k_ = GS2(ref_k,(global_h,global_w))
-
 
                 inp_out2 = xformers.ops.memory_efficient_attention(
                     inp_q, ref_k, ref_v, attn_bias=None, op=self.attention_op
@@ -891,10 +409,9 @@ class MemoryEfficientCrossAttention(nn.Module):
                 
                 register_msk = scale * register_msk
                 
-                #inp_out = 0.6*inp_out1 + 0.4*inp_out2 # 这个地方可能需要1-X，未来确保归一化
                 inp_out_new = (1-register_msk)*inp_out1 + register_msk*inp_out2 #
                 inp_out = adain_latentBHLC(inp_out_new, inp_out1)
-                cur_att_layer += 1 # 只统计进入attn1的层数个数
+                cur_att_layer += 1 
                 if cur_att_layer == TOTOAL_ATTN1_LAYER+1:
                     cur_att_layer = 1
 
@@ -1022,12 +539,12 @@ class BasicTransformerBlock(nn.Module):
 
         # return mixed_checkpoint(self._forward, kwargs, self.parameters(), self.checkpoint)
         return checkpoint(
-            self._forward, (x, context,n_times_crossframe_attn_in_self), self.parameters(), self.checkpoint # TODO 需要加一个参数，或者使用一个字典来做
+            self._forward, (x, context,n_times_crossframe_attn_in_self), self.parameters(), self.checkpoint 
         )
 
     def _forward(
         self, x, context=None, n_times_crossframe_attn_in_self=0, additional_tokens=None
-    ):# TODO 调用的使用解包了
+    ):
         x = (
             self.attn1(
                 self.norm1(x),
@@ -1175,8 +692,7 @@ class SpatialTransformer(nn.Module):
             self.proj_out = zero_module(nn.Linear(inner_dim, in_channels))
         self.use_linear = use_linear
 
-    def forward(self, x, context=None,n_times_crossframe_attn_in_self=0): # TODO 需要加上控制超参数，直接名字参数就可以
-        # note: if no context is given, cross-attention defaults to self-attention
+    def forward(self, x, context=None,n_times_crossframe_attn_in_self=0): 
         if not isinstance(context, list):
             context = [context]
         b, c, h, w = x.shape
@@ -1193,7 +709,7 @@ class SpatialTransformer(nn.Module):
         for i, block in enumerate(self.transformer_blocks):
             if i > 0 and len(context) == 1:
                 i = 0  # use same context for each block
-            x = block(x, context=context[i],n_times_crossframe_attn_in_self=n_times_crossframe_attn_in_self) # TODO 需要加上控制超惨
+            x = block(x, context=context[i],n_times_crossframe_attn_in_self=n_times_crossframe_attn_in_self) 
         if self.use_linear:
             x = self.proj_out(x)
         x = rearrange(x, "b (h w) c -> b c h w", h=h, w=w).contiguous()

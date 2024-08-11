@@ -1,15 +1,10 @@
-'''
- * SeeSR: Towards Semantics-Aware Real-World Image Super-Resolution 
- * Modified from diffusers by Rongyuan Wu
- * 24/12/2023
-'''
 import os
 os.chdir(os.path.dirname(__file__))
-os.environ["HF_DATASETS_CACHE"] = "/home/tiger/gh/cache/"
-os.environ["HF_HOME"] = "/home/tiger/gh/cache/"
-os.environ["HUGGINGFACE_HUB_CACHE"] = "/home/tiger/gh/cache/"
-os.environ["TRANSFORMERS_CACHE"] = "/home/tiger/gh/cache/"
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com/"
+# os.environ["HF_DATASETS_CACHE"] = "/home/tiger/gh/cache/"
+# os.environ["HF_HOME"] = "/home/tiger/gh/cache/"
+# os.environ["HUGGINGFACE_HUB_CACHE"] = "/home/tiger/gh/cache/"
+# os.environ["TRANSFORMERS_CACHE"] = "/home/tiger/gh/cache/"
+# os.environ["HF_ENDPOINT"] = "https://hf-mirror.com/"
 import sys
 sys.path.append(os.getcwd())
 import cv2
@@ -184,14 +179,11 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
         accelerator.init_trackers("SeeSR")
-    # TODO 劫持pipe的unet /.up_blocks
+    
     pipeline = load_seesr_pipeline(args, accelerator, enable_xformers_memory_efficient_attention) 
 
-    # =================== Hijack Here ======================
-    STEP = 4
-    LAYPER = 10
-    # 从第十层，第四个时间步往后，我们施加控制
-    editor = MutualSelfAttentionControl(STEP, LAYPER)
+    # =================== Hijack Here ================
+    editor = MutualSelfAttentionControl(args.refir_scale)
     regiter_attention_editor_diffusers(pipeline,editor)
 
 
@@ -208,20 +200,7 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
             image_names = [args.image_path]
 
 
-        # if 'CUFED' in args.image_path:
-        #     new_image_names = []
-        #     # cufed5只保留_0
-        #     for file_path in image_names:
-        #         idx = os.path.basename(file_path).split('_')[-1].split('.')[0]
-        #         if int(idx) == 0:
-        #             new_image_names.append(file_path)
-        #     image_names = new_image_names
-
-
         for image_idx, image_name in enumerate(image_names[:]):
-            # if image_idx <29:
-            #     continue
-
             print(f'================ process {image_idx} imgs... ===================')
             validation_image = Image.open(image_name).convert("RGB")
 
@@ -240,7 +219,6 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
             resize_flag = False
             rscale = args.upscale 
             
-            # 如果经过X4上采样之后还比512大。则不进行人工上采样处理
             if ori_width < args.process_size//rscale or ori_height < args.process_size//rscale:
                 scale = (args.process_size//rscale)/min(ori_width, ori_height)
                 tmp_image = validation_image.resize((int(scale*ori_width), int(scale*ori_height)))
@@ -248,11 +226,10 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
                 validation_image = tmp_image
                 resize_flag = True
             
-            # 和SUPIR一模一样，都是先对LQ做了人工的上采样，并且同样做了64倍的整除处理
             validation_image = validation_image.resize((validation_image.size[0]*rscale, validation_image.size[1]*rscale)) 
             validation_image = validation_image.resize((validation_image.size[0]//8*8, validation_image.size[1]//8*8))
             width, height = validation_image.size
-            resize_flag = True #
+            resize_flag = True 
 
 
             # ================= Ref-image =======================
@@ -262,17 +239,10 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
             elif 'WR' in args.image_path:
                 ref_image = Image.open(os.path.join(os.path.dirname(image_name).replace('Real_Deg/LR', 'ref'), os.path.basename(image_name).replace('LR','ref'))).convert("RGB")
             elif 'RealPhoto' in args.image_path:
-                # 原始的基于检索的方法
                 with open('/home/tiger/gh/dataset/retrieve_realPhoto.json', 'r') as fp:
                     match_dict = json.load(fp)
                 ref_path = match_dict[os.path.basename(image_name)][0]
                 ref_image= Image.open(ref_path)
-
-                # 使用coser的方法，直接使用SD2.1生成参考图像
-                #ref_path = os.path.join(os.path.dirname(image_name),'generated_'+os.path.basename(image_name)).replace('RealPhoto60','RealRef')
-                #ref_image = Image.open(ref_path) # [768,768]
-                
-
 
             else:
                 raise NotImplementedError
@@ -281,7 +251,7 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
             ref_validation_prompt += args.added_prompt # clean, extremely detailed, best quality, sharp, clean
             ref_negative_prompt = args.negative_prompt #dirty, messy, low quality, frames, deformed, 
             ref_width, ref_height = ref_image.size
-            if ref_width *2 < width or ref_height *2 < height: # 防止ref太小
+            if ref_width *2 < width or ref_height *2 < height: 
                 scale_ = max(width/(2*ref_width), height/(2*ref_height))
                 ref_image =  ref_image.resize((int(scale_*ref_width)+8, int(scale_*ref_height)+8))
             ref_image =  ref_image.resize(((ref_image.size[0]//8)*8, (ref_image.size[1]//8)*8))
@@ -291,10 +261,10 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
             # =========cat ref and LQ ============
             validation_image = tensor_transforms(validation_image).unsqueeze(0)
             ref_image = tensor_transforms(ref_image).unsqueeze(0)
-            ref_image = ref_image[:, :, :int(2 * height / 64) * 64, :int(2 * width / 64.0) * 64] # 防止ref太大
+            ref_image = ref_image[:, :, :int(2 * height / 64) * 64, :int(2 * width / 64.0) * 64] 
             ref_height, ref_width = ref_image.shape[2:]
 
-            # pading 组合ref + img
+            # pading 
             if ref_height != height or width != ref_width:
                 target_h = max(ref_height, height)
                 target_w = max(width, ref_width)
@@ -325,7 +295,6 @@ def main(args, enable_xformers_memory_efficient_attention=True,):
                         ).images
                 
                 
-                # 可以仿照之后的颜色平衡的代码，实现PIL返回tensor的转换
                 if args.align_method == 'nofix':
                     image = image
                 else:
@@ -357,16 +326,17 @@ if __name__ == "__main__":
     parser.add_argument("--added_prompt", type=str, default="clean, high-resolution, 8k")
     parser.add_argument("--negative_prompt", type=str, default="dotted, noise, blur, lowres, smooth")
     parser.add_argument("--image_path", type=str, default='/home/tiger/gh/dataset/RealPhoto60')
-    parser.add_argument("--output_dir", type=str, default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/realPhoto_nomask')
+    parser.add_argument("--output_dir", type=str, default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/realPhoto')
     parser.add_argument("--mixed_precision", type=str, default="fp16") # no/fp16/bf16
     parser.add_argument("--guidance_scale", type=float, default=5.5)
     parser.add_argument("--conditioning_scale", type=float, default=1.0)
     parser.add_argument("--blending_alpha", type=float, default=1.0)
     parser.add_argument("--num_inference_steps", type=int, default=50)
     parser.add_argument("--process_size", type=int, default=512)
-    parser.add_argument("--vae_decoder_tiled_size", type=int, default=2048)#224) # latent size, for 24G
-    parser.add_argument("--vae_encoder_tiled_size", type=int, default=2048)#1024) # image size, for 13G
-    parser.add_argument("--latent_tiled_size", type=int, default=2048)#96) 
+    parser.add_argument("--refir_scale", type=float, default=1.0)
+    parser.add_argument("--vae_decoder_tiled_size", type=int, default=2048)
+    parser.add_argument("--vae_encoder_tiled_size", type=int, default=2048)
+    parser.add_argument("--latent_tiled_size", type=int, default=2048)
     parser.add_argument("--latent_tiled_overlap", type=int, default=32) 
     parser.add_argument("--upscale", type=int, default=1)
     parser.add_argument("--seed", type=int, default=None)

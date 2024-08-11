@@ -44,6 +44,6 @@ def extract_features(dataset_path, batch_size=32):
 
 if __name__ == '__main__':
     # Use the function
-    features, file_paths = extract_features('/home/tiger/gh/dataset/DF2K')
+    features, file_paths = extract_features('/home/tiger/gh/dataset/DIV2K/DIV2K_train_HR')
     np.save('/home/tiger/gh/dataset/div_feat.npy', features)
     np.save('/home/tiger/gh/dataset/div_path.npy', file_paths)

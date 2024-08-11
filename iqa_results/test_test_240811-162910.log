@@ -1,0 +1,8 @@
+24-08-11 16:29:10.575 - INFO: Namespace(gt_path='/home/tiger/gh/dataset/WR-SR-testset/Real_Deg/HR', img_path='/home/tiger/gh/dataset/results/Real_Deg/seeSR/wr-sr/sample00', log='./iqa_results', log_name='test', num_img=0)
+24-08-11 16:29:38.847 - INFO: psnr:22.004872
+24-08-11 16:29:38.847 - INFO: ssim:0.564757
+24-08-11 16:29:38.850 - INFO: lpips:0.344190
+24-08-11 16:29:38.850 - INFO: niqe:3.912302
+24-08-11 16:29:38.851 - INFO: fid:61.062697
+24-08-11 16:29:38.851 - INFO: musiq:72.114998
+24-08-11 16:29:38.851 - INFO: clipiqa:0.716011

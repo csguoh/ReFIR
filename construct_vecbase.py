@@ -27,17 +27,14 @@ class RetrivalDataset(Dataset):
         return image, img_path
 
 def extract_features(dataset_path, batch_size=32):
-    # 加载预训练模型
     model = models.vgg16(pretrained=True)
-    model = model.features  # 使用卷积层的输出作为特征
+    model = model.features
     model.eval()
     model.to('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # 准备数据
     dataset = RetrivalDataset(dataset_path)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 
-    # 提取特征
     features = []
     file_paths = []
     with torch.no_grad():
@@ -55,7 +52,6 @@ def extract_features(dataset_path, batch_size=32):
 
 
 if __name__ == '__main__':
-    # 使用函数
     features, file_paths = extract_features('/home/tiger/gh/dataset/DIV2K/DIV2K_train_HR')
     np.save('/home/tiger/gh/dataset/div_feat.npy', features)
     np.save('/home/tiger/gh/dataset/div_path.npy', file_paths)

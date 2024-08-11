@@ -1,14 +1,13 @@
 from ast import mod
 import os
-#os.environ['CUDA_VISIBLE_DEVICES']='1'
 from turtle import shape
 import numpy as np
 import json
-os.environ["HF_DATASETS_CACHE"] = "/home/tiger/gh/cache/"
-os.environ["HF_HOME"] = "/home/tiger/gh/cache/"
-os.environ["HUGGINGFACE_HUB_CACHE"] = "/home/tiger/gh/cache/"
-os.environ["TRANSFORMERS_CACHE"] = "/home/tiger/gh/cache/"
-os.environ["HF_ENDPOINT"] = "https://hf-mirror.com/"
+# os.environ["HF_DATASETS_CACHE"] = "/home/tiger/gh/cache/"
+# os.environ["HF_HOME"] = "/home/tiger/gh/cache/"
+# os.environ["HUGGINGFACE_HUB_CACHE"] = "/home/tiger/gh/cache/"
+# os.environ["TRANSFORMERS_CACHE"] = "/home/tiger/gh/cache/"
+# os.environ["HF_ENDPOINT"] = "https://hf-mirror.com/"
 import torch.cuda
 import torch.nn as nn
 import torch.nn.functional as F
@@ -90,37 +89,33 @@ else:
     llava_agent = None
 
 
-excpt_list = ['.DS_Store']  # ['019.png','023.png','044.png']
+excpt_list = ['.DS_Store']  
 os.makedirs(args.save_dir, exist_ok=True)
 
 for img_pth in sorted(os.listdir(args.img_dir)):
-    # if img_pth < '31.png':
-    #     continue
-    
     print(img_pth)
     # caption from LLaVA
     captions = []
     img_name = os.path.splitext(img_pth)[0].split('_')[0]
-    #  down-smaple to LQ  MANUAL DOWN-SAMPLING
-    LQ_img = Image.open(os.path.join(args.img_dir, img_pth)) # 低分辨率的图像
+
+    LQ_img = Image.open(os.path.join(args.img_dir, img_pth))
     h_LQ, w_LQ = LQ_img.height, LQ_img.width
 
     if use_llava:
-        # Pre-denoise for LLaVA
-        # 这里的思路是先对LQ上采样到512，之后过SR模型得到较为清晰的图像，最后再把这个处理后的图像resize回原来的大小
+        # Pre-denoise
         LQ_img_512 = PIL2Tensor(LQ_img, upsacle=args.upscale, min_size=args.min_size, fix_resize=512)[0]
         LQ_img_512 = LQ_img_512.unsqueeze(0).to(SUPIR_device)[:, :3, :, :]
         clean_imgs = model.batchify_denoise(LQ_img_512)
-        clean_PIL_img = Tensor2PIL(clean_imgs[0], h_LQ, w_LQ) # 重新变回原来的大小
+        clean_PIL_img = Tensor2PIL(clean_imgs[0], h_LQ, w_LQ) 
         captions += llava_agent.gen_image_caption([clean_PIL_img])
     else:
         captions += ['']
 
-    # 同时进行类型转换 + 插值上采样(用的暴力resize，因此会改变原始图像的长宽比,也没强制要求是4倍，只要模型喜欢就行
-    scale = 4
-    LQ_img = PIL2Tensor(LQ_img, upsacle=scale, min_size=128)[0]  # BUG 这里的输出大小是原来的结果
+
+    scale = args.upscale
+    LQ_img = PIL2Tensor(LQ_img, upsacle=scale, min_size=128)[0]
     LQ_img = LQ_img.unsqueeze(0)[:, :3, :, :]
-    LQ_h_resize, LQ_w_resize = LQ_img.shape[2:] # resize之后的大小，不是原来大小的4倍
+    LQ_h_resize, LQ_w_resize = LQ_img.shape[2:]
 
 
     with open('/home/tiger/gh/dataset/retrieve_realPhoto.json', 'r') as fp:
@@ -128,19 +123,18 @@ for img_pth in sorted(os.listdir(args.img_dir)):
         ref_path = match_dict[img_pth][0]
         ref_img= Image.open(ref_path)
 
-    #ref_img = Image.open(os.path.join(args.img_dir.replace('Real_Deg/LR', 'ref'), img_name+'_ref'+'.png'))
 
     if use_llava:
-        captions += llava_agent.gen_image_caption([ref_img])  # ref图像不需要去噪
+        captions += llava_agent.gen_image_caption([ref_img]) 
     else:
         captions += ['']
 
-    ref_img, h1, w1 = PIL2Tensor(ref_img, upsacle=1, min_size=128) # 防止ref图像太小
+    ref_img, h1, w1 = PIL2Tensor(ref_img, upsacle=1, min_size=128) 
     ref_img = ref_img.unsqueeze(0)[:, :3, :, :]
-    ref_img = ref_img[:, :, :int(2 * LQ_h_resize / 64) * 64, :int(2 * LQ_w_resize / 64.0) * 64]  # BUG crop一下ref-img，防止LR远小于Ref
+    ref_img = ref_img[:, :, :int(2 * LQ_h_resize / 64) * 64, :int(2 * LQ_w_resize / 64.0) * 64]  
     ref_img_h, ref_img_w = ref_img.shape[2:]
 
-    # pading 组合ref + img
+    # pading
     if ref_img_h != LQ_h_resize or ref_img_w != LQ_w_resize:
         use_padding = True
         target_h = max(LQ_h_resize, ref_img_h)
@@ -157,7 +151,6 @@ for img_pth in sorted(os.listdir(args.img_dir)):
 
     print(captions)
     # # step 3: Diffusion Process
-    # while True:
     samples = model.batchify_sample(cat_img, captions, num_steps=args.edm_steps, restoration_scale=args.s_stage1,
                                     s_churn=args.s_churn,
                                     s_noise=args.s_noise, cfg_scale=args.s_cfg, control_scale=args.s_stage2,
