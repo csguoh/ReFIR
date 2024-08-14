@@ -44,10 +44,9 @@ def adain_latent(feat, cond_feat, timestep=0, eps=1e-5, total_t=900):
     cond_feat_mean = cond_feat.mean(dim=1).view(head, 1, C)
     feat = (feat - feat_mean.expand(size)) / feat_std.expand(size)
     
-    # 最好把它说成是一种梯度下降，先写一个优化问题，然后用梯度下降求解从而得到本文公式
     weight = cosine_schedule(1000-timestep.item(), 1000-total_t)
-    target_std =cond_feat_std # (weight*feat_std + (1-weight)*cond_feat_std)
-    target_mean= cond_feat_mean # (weight*feat_mean + (1-weight)*cond_feat_mean)
+    target_std =cond_feat_std 
+    target_mean= cond_feat_mean
     out =  feat * target_std.expand(size) + target_mean.expand(size)
     out = out.permute(0,2,1).reshape(B,C,H,W)
     return out
@@ -575,7 +574,6 @@ class RestoreEDMSampler(SingleStepDiffusionSampler):
 
     def denoise(self, x, denoiser, sigma, cond, uc, control_scale=1.0):
         denoised,time_step = denoiser(*self.guider.prepare_inputs(x, sigma, cond, uc), control_scale)
-        # TODO AdaIN here
         if time_step[0] >900:
             is_adain = False
         else:
@@ -590,7 +588,6 @@ class RestoreEDMSampler(SingleStepDiffusionSampler):
             if eps_noise is not None:
                 eps = eps_noise * self.s_noise
             else:
-                # TODO need to be same
                 eps = torch.randn_like(x) * self.s_noise
                 eps = torch.stack([eps[0] for _ in range(eps.shape[0])])
 
@@ -608,10 +605,7 @@ class RestoreEDMSampler(SingleStepDiffusionSampler):
         d = to_d(x, sigma_hat, denoised)
         dt = append_dims(next_sigma - sigma_hat, x.ndim)
         x = self.euler_step(x, d, dt)
-
-        # if timestep[0]>800:
-        #     x[0] = adain_latent(x[0:1], x[1:2],timestep[0],total_t=800)
-                
+         
         return x
 
     def __call__(self, denoiser, x, cond, uc=None, num_steps=None, x_center=None, control_scale=1.0,

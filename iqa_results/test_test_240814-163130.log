@@ -1,0 +1,4 @@
+24-08-14 16:31:30.588 - INFO: Namespace(img_path='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/realPhoto', log='./iqa_results', log_name='test', num_img=0)
+24-08-14 16:32:06.768 - INFO: niqe:3.713723
+24-08-14 16:32:06.768 - INFO: musiq:58.171779
+24-08-14 16:32:06.770 - INFO: clipiqa:0.552322

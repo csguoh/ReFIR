@@ -84,7 +84,7 @@ class ControlWrapper(nn.Module):
     def forward(
             self, x: torch.Tensor, t: torch.Tensor, c: dict, control_scale=1, **kwargs
     ) -> torch.Tensor: 
-        with torch.autocast("cuda", dtype=self.dtype): # TODO  ControlNet的结构需要修改
+        with torch.autocast("cuda", dtype=self.dtype): 
             control = self.control_model(x=c.get("control", None), timesteps=t, xt=x,
                                          control_vector=c.get("control_vector", None),
                                          mask_x=c.get("mask_x", None),

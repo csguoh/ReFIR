@@ -398,7 +398,7 @@ class MemoryEfficientCrossAttention(nn.Module):
                 global cur_att_layer
                 #weight = cosine_schedule(cur_att_layer, TOTOAL_ATTN1_LAYER)
                 
-                scale = 1.
+                scale = self.refir_scale
                 from SUPIR.modules.SUPIR_v0 import decoder_h,decoder_w, register_msk
 
                 register_msk = torch.nn.functional.interpolate(register_msk,size=(decoder_h,decoder_w), mode='bilinear', align_corners=False)

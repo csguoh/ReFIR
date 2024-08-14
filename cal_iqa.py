@@ -84,8 +84,8 @@ def main():
 		"--img_path",
 		nargs="+",
 		help="path to the input image",
-		default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/cufed/sample00',
-		#default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/cufed',
+		#default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/cufed/sample00',
+		default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/cufed',
 	)
 
 
