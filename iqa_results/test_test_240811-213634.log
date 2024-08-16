@@ -1,8 +1,0 @@
-24-08-11 21:36:34.096 - INFO: Namespace(gt_path='/home/tiger/gh/dataset/CUFED5/Real_Deg/HR', img_path='/home/tiger/gh/dataset/results/Real_Deg/seeSR/cufed/sample00', log='./iqa_results', log_name='test', num_img=0)
-24-08-11 21:36:58.316 - INFO: psnr:20.218967
-24-08-11 21:36:58.316 - INFO: ssim:0.525575
-24-08-11 21:36:58.319 - INFO: lpips:0.345114
-24-08-11 21:36:58.319 - INFO: niqe:3.745817
-24-08-11 21:36:58.320 - INFO: fid:137.485130
-24-08-11 21:36:58.320 - INFO: musiq:70.524456
-24-08-11 21:36:58.320 - INFO: clipiqa:0.553549

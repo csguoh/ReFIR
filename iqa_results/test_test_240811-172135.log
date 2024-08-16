@@ -1,4 +1,0 @@
-24-08-11 17:21:35.457 - INFO: Namespace(img_path='/home/tiger/gh/dataset/results/Real_Deg/seeSR/realPhoto/sample00', log='./iqa_results', log_name='test', num_img=0)
-24-08-11 17:21:45.602 - INFO: niqe:3.822087
-24-08-11 17:21:45.602 - INFO: musiq:71.548899
-24-08-11 17:21:45.604 - INFO: clipiqa:0.731824
