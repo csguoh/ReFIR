@@ -85,7 +85,7 @@ def main():
 		nargs="+",
 		help="path to the input image",
 		#default='/home/tiger/gh/dataset/results/Real_Deg/seeSR/cufed/sample00',
-		default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/cufed',
+		default='/home/tiger/gh/dataset/results/Real_Deg/SUPIR/wr-sr',
 	)
 
 
@@ -93,7 +93,7 @@ def main():
 		"--gt_path",
 		nargs="+",
 		help="path to the gt image, you need to add the paths of gt folders corresponding to init-imgs",
-		default='/home/tiger/gh/dataset/CUFED5/Real_Deg/HR'
+		default='/home/tiger/gh/dataset/WR-SR-testset/Real_Deg/HR'
 	)
 	
 	parser.add_argument(

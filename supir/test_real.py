@@ -168,7 +168,8 @@ for img_pth in sorted(os.listdir(args.img_dir)):
                                     use_linear_CFG=args.linear_CFG, use_linear_control_scale=args.linear_s_stage2,
                                     cfg_scale_start=args.spt_linear_CFG, control_scale_start=args.spt_linear_s_stage2)
     # save
+    save_name = os.path.splitext(os.path.basename(img_pth))[0]
     for _i, sample in enumerate(samples):
-        Tensor2PIL(sample[:, :LQ_h_resize, :LQ_w_resize], scale*h_LQ, scale*w_LQ).save(f'{args.save_dir}/{img_name}.png')
+        Tensor2PIL(sample[:, :LQ_h_resize, :LQ_w_resize], scale*h_LQ, scale*w_LQ).save(f'{args.save_dir}/{save_name}.png')
         break
 
