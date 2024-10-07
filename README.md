@@ -1,8 +1,8 @@
 # ReFIR: Grounding Large Restoration Models with Retrieval Augmentation
 
-[Hang Guo](https://csguoh.github.io/)<sup>1,4</sup> | [Tao Dai](https://scholar.google.com/citations?user=MqJNdaAAAAAJ&hl=zh-CN)<sup>2</sup> | [Zhihao Ouyang]()<sup>3,4</sup> | [Taolin Zhang](https://scholar.google.com.hk/citations?user=DWnu_G0AAAAJ&hl=zh-CN) <sup>1</sup> | [Yaohua Zha](https://scholar.google.com.hk/citations?user=-zUO4_QAAAAJ&hl=zh-CN)<sup>1</sup> | [ Bin Chen](https://scholar.google.com.hk/citations?user=Yl0wv7AAAAAJ&hl=zh-CN)<sup>5</sup> | [Shu-Tao Xia](https://scholar.google.com.hk/citations?user=koAXTXgAAAAJ&hl=zh-CN)<sup>1,6</sup>
+[Hang Guo](https://csguoh.github.io/)<sup>1</sup> | [Tao Dai](https://scholar.google.com/citations?user=MqJNdaAAAAAJ&hl=zh-CN)<sup>2</sup> | [Zhihao Ouyang]()<sup>3</sup> | [Taolin Zhang](https://scholar.google.com.hk/citations?user=DWnu_G0AAAAJ&hl=zh-CN) <sup>1</sup> | [Yaohua Zha](https://scholar.google.com.hk/citations?user=-zUO4_QAAAAJ&hl=zh-CN)<sup>1</sup> | [ Bin Chen](https://scholar.google.com.hk/citations?user=Yl0wv7AAAAAJ&hl=zh-CN)<sup>4</sup> | [Shu-Tao Xia](https://scholar.google.com.hk/citations?user=koAXTXgAAAAJ&hl=zh-CN)<sup>1,5</sup>
 
-<sup>1</sup>Tsinghua University, <sup>2</sup>Shenzhen University, <sup>3</sup>ByteDance Inc.,  <sup>4</sup>Aitist.ai, <sup>5</sup>Harbin Institute of Technology  <sup>5</sup>Pengcheng Laboratory 
+<sup>1</sup>Tsinghua University, <sup>2</sup>Shenzhen University, <sup>3</sup>Aitist.ai, <sup>4</sup>Harbin Institute of Technology  <sup>5</sup>Pengcheng Laboratory 
 
 
 :star: If ReFIR is helpful to your images or projects, please help star this repo. Thanks! :hugs:
