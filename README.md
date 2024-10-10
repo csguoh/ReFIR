@@ -195,8 +195,17 @@ This project is based on [SeeSR](https://github.com/cswry/SeeSR) and [SUPIR](htt
 If our code helps your research or work, please consider citing our paper.
 The following are BibTeX references:
 
-```
+Hang Guo1 Tao Dai∗2 Zhihao Ouyang3 Taolin Zhang1
+Yaohua Zha1 Bin Chen4 Shu-tao Xia
 
+
+```
+@article{guo2024refir,
+  title={ReFIR: Grounding Large Restoration Models with Retrieval Augmentation},
+  author={Guo, Hang and Dai, Tao and Ouyang, Zhihao and Zhang, Taolin and Zha, Yaohua and Chen, Bin and Xia, Shu-Tao},
+  journal={arXiv preprint arXiv:2410.05601},
+  year={2024}
+}
 ```
 
 
