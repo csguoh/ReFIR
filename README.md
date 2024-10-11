@@ -196,9 +196,6 @@ This project is based on [SeeSR](https://github.com/cswry/SeeSR) and [SUPIR](htt
 If our code helps your research or work, please consider citing our paper.
 The following are BibTeX references:
 
-Hang Guo1 Tao Dai∗2 Zhihao Ouyang3 Taolin Zhang1
-Yaohua Zha1 Bin Chen4 Shu-tao Xia
-
 
 ```
 @article{guo2024refir,
