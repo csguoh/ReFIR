@@ -69,7 +69,7 @@ We consider two types of testing scenarios:
 
 - We use the classic refsr datasets for this setup, including [CUFED5](https://drive.google.com/file/d/1_eOcsgUrAOoUeCQqftruIatFHfVzTzOY/view?usp=drive_link) and [WR-SR](https://drive.google.com/file/d/1t41safv1IiulsFH_zLlxGsgzt8JmRtjR/view?usp=drive_link) dataset. 
 - We apply the real-world degradation from Real-ESRGAN to obtain the LQ images
-- You can download the pre-processed CUFED5 and WR-SR dataset with this link.
+- You can download the pre-processed CUFED5 and WR-SR dataset with this [link](https://drive.google.com/drive/folders/1xY2dsC2wPlC4qQyCQyajBgmhgGbNTyLl?usp=drive_link).
   
 
 **[2. Restoration in the Wild]**
