@@ -75,7 +75,7 @@ We consider two types of testing scenarios:
 **[2. Restoration in the Wild]**
 
 - We use the RealPhoto60 which is obtained from real-world and have no corresponding GT for this setting.
-- You can download RealPhoto60 using this link.
+- You can download RealPhoto60 using this [link](https://drive.google.com/file/d/1U7fGshj4vK6F8QrDqw-Oe9a7Nko2kdFo/view?usp=drive_link).
 - Additionally, you may also need to download the DIV2K dataset as the retrieval database.
 
 
